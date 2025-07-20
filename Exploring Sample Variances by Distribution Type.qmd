@@ -1,0 +1,559 @@
+---
+title: "Exploring Sample Variances by Distribution Type"
+subtitle: "Add these files to each project folder"
+author: "Dan Swart"
+date: "2025-04-29"
+# bibliography: manual-refs.bib
+format:
+  html:
+    code-copy: true
+    include-after-body: 
+      - text: |
+         <script type="text/javascript" src="reference-backlinks.js"></script>
+    css: 
+      - swart.css
+    page-layout: full
+    fig-width: 12
+    fig-height: 10
+    fig-dpi: 300
+    df-print: paged
+    code-overflow: wrap
+    toc: true
+    citeproc: true
+    link-citations: true
+  typst:
+    fig-width: 12
+    fig-height: 10
+    fig-dpi: 300
+    margin:
+      x: 1in
+      y: 1in
+    toc: true
+    fontsize: 14pt
+    mainfont: "Latin Modern Roman"
+execute:
+  echo: false
+  message: false
+  warning: false
+  eval: true
+  fig-width: 12
+  fig-height: 10
+
+---
+
+```{r}
+#| label: setup
+#| include: false
+
+
+knitr::opts_chunk$set(echo = TRUE)
+
+# Prevent scientific notation globally
+options(scipen = 999)
+
+# load libraries
+library(tidyverse)
+library(DT)
+library(plotly)
+library(ggplot2)
+library(kableExtra)
+library(tibble)
+library(patchwork)
+library(ppcor)
+library(ggdag)
+library(ggplot2)
+library(corrplot)
+library(ggcorrplot)
+library(car)
+library(WRS2)
+library(boot)
+library(BayesFactor)
+library(pwr)
+library(qgraph)
+library(scales)
+
+
+# Set global theme for consistent plots
+theme_set(theme_minimal(base_size = 16) + 
+          theme(
+    plot.title = element_text(face = "bold", size = 24),    # adjust title size
+    plot.subtitle = element_text(face = "bold", size = 20), # adjust subtitle size
+    axis.title.x = element_text(face = "bold"),
+    axis.title.y = element_text(face = "bold"),
+    axis.text.x = element_text(face = "bold", angle = 45, hjust = 1),
+    legend.position = "bottom",
+    strip.text = element_text(face = "bold"),
+    panel.spacing.x = unit(1.5, "cm"),  # Horizontal spacing only
+    panel.spacing.y = unit(1.5, "cm"),   # Vertical spacing only
+    plot.margin = margin(20, 20, 20, 20, "pt")
+    )
+)
+
+
+# Set seed for reproducibility
+set.seed(123)
+
+```
+
+
+# Step 1: Creating Different Universes (Populations)
+
+Conceptual thinking:
+
+Create populations with different characteristics to sample from. This requires understanding different probability distributions.
+
+Code skills needed:
+
+- Using random number generation functions
+- Setting seeds for reproducibility
+- Constraining values to specific ranges
+
+```{r}
+
+library(tidyverse)
+
+set.seed(123)
+
+# Create a random universe (1000 random integers between 1 and 1000)
+random_universe <- sample(1:1000, 1000, replace = TRUE)
+
+# Create non-random universes (several options)
+
+# Option 1: Sequential numbers
+sequential_universe <- 1:1000
+
+# Option 2: Clustered data (4 distinct clusters)
+clustered_universe <- c(
+  rnorm(250, mean = 100, sd = 20),
+  rnorm(250, mean = 300, sd = 20),
+  rnorm(250, mean = 600, sd = 20),
+  rnorm(250, mean = 900, sd = 20)
+)
+# Round to integers and ensure values are within 1-1000
+clustered_universe <- pmin(1000, pmax(1, round(clustered_universe)))
+
+# Option 3: Bimodal distribution
+bimodal_universe <- c(
+  rnorm(500, mean = 250, sd = 100),
+  rnorm(500, mean = 750, sd = 100)
+)
+# Round to integers and ensure values are within 1-1000
+bimodal_universe <- pmin(1000, pmax(1, round(bimodal_universe)))
+
+# Option 4: Increasing variance (first half has low variance, second half high)
+increasing_var_universe <- c(
+  rnorm(500, mean = 500, sd = 50),
+  rnorm(500, mean = 500, sd = 200)
+)
+# Round to integers and ensure values are within 1-1000
+increasing_var_universe <- pmin(1000, pmax(1, round(increasing_var_universe)))
+ 
+
+
+# create dataframes for ggplot2
+df_random <- data.frame(random_universe)
+df_sequential <- data.frame(sequential_universe)
+df_clustered <- data.frame(clustered_universe)
+df_bimodal <- data.frame(bimodal_universe)
+df_increasing_var_universe <- data.frame(increasing_var_universe)
+
+
+# Histograms of the universes
+ggplot(df_random, aes(x = random_universe)) +
+  geom_histogram(binwidth = 10, fill = "lightgreen", color = "black", alpha = 0.7) +
+  labs(title = "Histogram of Random Uniform Universe", x = "Value", y = "Frequency")
+
+ggplot(df_sequential, aes(x = sequential_universe)) +
+  geom_histogram(binwidth = 10, fill = "lightgreen", color = "black", alpha = 0.7) +
+  labs(title = "Histogram of Sequential", x = "Value", y = "Frequency")
+
+ggplot(df_clustered, aes(x = clustered_universe)) +
+  geom_histogram(binwidth = 10, fill = "lightgreen", color = "black", alpha = 0.7) +
+  labs(title = "Histogram of Clustered Universe", x = "Value", y = "Frequency")
+
+ggplot(df_bimodal, aes(x = bimodal_universe)) +
+  geom_histogram(binwidth = 10, fill = "lightgreen", color = "black", alpha = 0.7) +
+  labs(title = "Histogram of Bi-Modal Universe", x = "Value", y = "Frequency")
+
+ggplot(df_increasing_var_universe, aes(x = increasing_var_universe)) +
+  geom_histogram(binwidth = 10, fill = "lightgreen", color = "black", alpha = 0.7) +
+  labs(title = "Histogram of Increasing Variance Universe", x = "Value", y = "Frequency")
+
+
+```
+
+
+# Step 2: Creating a Function to Take Samples and Calculate Variance
+
+Conceptual thinking:
+
+We need a function that can repeatedly sample from our universes and calculate the variance of each sample.
+
+Code skills needed:
+
+- Function definition
+- Looping (for loops), or purrr::map()
+- Sampling from vectors
+- Statistical functions (var())
+- Creating vectors to store results
+
+
+When creating a function like calculate_sample_variances(), approach it by thinking about the overall process in steps. 
+
+Identify the task: 
+
+I need a function that:
+
+- takes multiple random samples from a universe and 
+- calculates the variance of each sample.
+
+Define the inputs (parameters):
+
+- universe: The population I'll sample from
+- sample_size: How many elements to include in each sample
+- num_samples = 100: How many samples to take (with a default value)
+
+
+Plan the outputs: 
+
+- I need to return a numeric vector containing all the sample variances.
+
+Break down the algorithm:
+
+- Create a container to store results (the empty vector)
+
+Repeatedly:
+
+- Take a random sample
+- Calculate its variance
+- Store that variance
+
+
+Return all the variances
+
+
+Code the implementation:
+
+This approach follows a common pattern in R functions:
+
+Create containers for outputs
+Perform operations in a loop or vectorized operation
+Return the result
+
+The key skills demonstrated here are:
+
+- Create empty vector with numeric(num_samples) (more efficient than growing a vector)
+- Using a for loop to repeat an operation a specific number of times
+- Storing results at specific indices of a vector
+- Using sample() to draw random samples
+- Using var() to calculate variance
+
+If I were writing this for the first time, I might prototype it with a small dataset to ensure it works correctly before using it in a larger analysis.
+
+
+```{r}
+# Using a for loop
+
+calculate_sample_variances <- function(universe, sample_size, num_samples = 100) {
+  # Create empty numeric vector to store results
+  variances <- numeric(num_samples)   # num_samples = sample size
+  
+  # Loop through and take samples
+  for(i in 1:num_samples) {
+    sample_data <- sample(universe, sample_size)
+    variances[i] <- var(sample_data)
+  }
+  
+  return(variances)
+}
+```
+
+## Same using purrr package
+
+```{r}
+library(purrr)
+
+calculate_sample_variances_purrr <- function(universe, sample_size, num_samples = 100) {
+  # Use map_dbl to iterate and return a numeric vector
+  variances <- map_dbl(1:num_samples, function(x) {
+    sample_data <- sample(universe, sample_size)
+    var(sample_data)
+  })
+  
+  return(variances)
+}
+
+
+```
+
+
+## Same using purrr anonymous function
+
+```{r}
+library(purrr)
+
+calculate_sample_variances_purrr <- function(universe, sample_size, num_samples = 100) {
+  map_dbl(1:num_samples, ~ var(sample(universe, sample_size)))
+}
+
+```
+
+
+# Step 3: Running the Experiment with Different Sample Sizes
+
+Conceptual thinking:
+
+See how sample size affects variance estimates, so test multiple sample sizes.
+
+Code skills needed:
+
+- Creating and managing lists
+- Looping through vectors
+- Iteratively building data structures
+- String manipulation for naming
+
+```{r}
+
+# Using For loop
+
+# Define sample sizes to test
+sample_sizes <- c(10, 30, 50, 100, 200, 500)
+
+# Create empty list to store results
+results <- list()
+
+# Loop through sample sizes
+for(size in sample_sizes) {
+  # Calculate variances for each universe
+  random_variances <- calculate_sample_variances(random_universe, size)
+  sequential_variances <- calculate_sample_variances(sequential_universe, size)
+  clustered_variances <- calculate_sample_variances(clustered_universe, size)
+  bimodal_variances <- calculate_sample_variances(bimodal_universe, size)
+  increasing_var_variances <- calculate_sample_variances(increasing_var_universe, size)
+  
+  # Store in results list with descriptive names
+  results[[paste0("size_", size)]] <- list(
+    random = random_variances,
+    sequential = sequential_variances,
+    clustered = clustered_variances,
+    bimodal = bimodal_variances,
+    increasing = increasing_var_variances
+  )
+}
+
+```
+
+Same using purrr()
+
+```{r}
+# Using purrr()
+
+# Define sample sizes to test
+sample_sizes <- c(10, 30, 50, 100, 200, 500)
+
+# Use map() to process each sample size and create a named list
+results_purrr <- map(sample_sizes, function(size) {
+  
+  # Calculate variances for each universe
+  random_variances_purrr <- calculate_sample_variances_purrr(random_universe, size)
+  sequential_variances_purrr <- calculate_sample_variances_purrr(sequential_universe, size)
+  clustered_variances_purrr <- calculate_sample_variances_purrr(clustered_universe, size)
+  bimodal_variances_purrr <- calculate_sample_variances_purrr(bimodal_universe, size)
+  increasing_var_variances_purrr <- calculate_sample_variances_purrr(increasing_var_universe, size)
+  
+  # Return a list for this sample size
+  list(
+    random = random_variances_purrr,
+    sequential = sequential_variances_purrr,
+    clustered = clustered_variances_purrr,
+    bimodal = bimodal_variances_purrr,
+    increasing = increasing_var_variances_purrr
+  )
+}) %>% 
+  # Set names for the resulting list elements
+  set_names(paste0("size_", sample_sizes))
+
+```
+
+Visually compare the 2 methods (they should be very nearly the same)
+
+```{r}
+library(tidyr)
+library(dplyr)
+library(ggplot2)
+
+# Function to extract values from a nested list into a data frame
+extract_values <- function(results_list, source_name) {
+  result_df <- data.frame()
+  
+  for (size_name in names(results_list)) {
+    size <- as.numeric(gsub("size_", "", size_name))
+    
+    for (universe_type in names(results_list[[size_name]])) {
+      temp_df <- data.frame(
+        sample_size = size,
+        universe_type = universe_type,
+        variance = results_list[[size_name]][[universe_type]],
+        source = source_name
+      )
+      
+      result_df <- rbind(result_df, temp_df)
+    }
+  }
+  
+  return(result_df)
+}
+
+# Create data frames from both lists
+df1 <- extract_values(results, "for_loop")
+df2 <- extract_values(results_purrr, "purrr")
+
+# Combine the data frames
+combined_df <- rbind(df1, df2)
+
+# Plot comparison
+ggplot(combined_df, aes(x = variance, fill = source)) +
+  geom_density(alpha = 0.5) +
+  facet_grid(universe_type ~ sample_size, scales = "free") +
+  labs(title = "Comparison of Variance Distributions",
+       subtitle = "For loop vs purrr implementation",
+       x = "Variance", y = "Density")
+
+```
+
+
+# Step 4: Converting Results to One Big Data Frame for Analysis
+
+Conceptual thinking:
+
+To analyze and visualize the results, convert the nested list into a tidy data frame.
+
+Code skills needed:
+
+- Data frame creation and manipulation
+- List extraction
+- String manipulation (for labeling)
+- Combining data frames (rbind)
+
+```{r}
+
+# Create empty data frame
+results_df <- data.frame()
+
+# Loop through each sample size in results
+for(size_name in names(results)) {
+  # Extract numeric size from name
+  size <- as.numeric(gsub("size_", "", size_name))
+  
+  # For each universe type and sample size, add data to results_df
+  for(universe_type in names(results[[size_name]])) {
+    # Create temporary data frame
+    temp_df <- data.frame(
+      sample_size = size,
+      variance = results[[size_name]][[universe_type]],
+      universe_type = universe_type
+    )
+    
+    # Add to main results data frame
+    results_df <- rbind(results_df, temp_df)
+  }
+}
+
+```
+
+# Step 5: Analyzing and Visualizing Results
+
+Conceptual thinking:
+
+Compare variances across universe types and sample sizes to understand patterns.
+
+Code skills needed:
+
+- Using ggplot2 for visualization
+- Statistical tests (F-test, t-test)
+- Calculating effect sizes
+- Data grouping and summarization
+
+```{r}
+library(ggplot2)
+library(dplyr)
+
+# Basic boxplot of variances by universe type and sample size
+ggplot(results_df, aes(x = factor(sample_size), y = variance, color = universe_type)) +
+  geom_boxplot() +
+  labs(
+    title = "Sample Variance by Sample Size and Universe Type",
+    x = "Sample Size",
+    y = "Variance",
+    color = "Universe Type"
+  ) 
+
+# Calculate summary statistics
+summary_stats <- results_df %>%
+  group_by(sample_size, universe_type) %>%
+  summarize(
+    mean_variance = mean(variance),
+    sd_variance = sd(variance),
+    n = n(),
+    se = sd_variance/sqrt(n),
+    ci_lower = mean_variance - 1.96*se,
+    ci_upper = mean_variance + 1.96*se
+  )
+
+# Plot with confidence intervals
+ggplot(summary_stats, aes(x = factor(sample_size), y = mean_variance, color = universe_type)) +
+  geom_point(size = 3) +
+  geom_errorbar(aes(ymin = ci_lower, ymax = ci_upper), width = 0.2) +
+  labs(
+    title = "Mean Sample Variance with 95% Confidence Intervals",
+    x = "Sample Size",
+    y = "Mean Variance",
+    color = "Universe Type"
+  ) 
+
+```
+
+# Step 6: Statistical Testing Between Universe Types
+
+Conceptual thinking:
+
+Formally test if the variances differ significantly between universe types.
+
+Code skills needed:
+
+- Hypothesis testing functions
+- Looping through grouped data
+- Creating summary data frames
+- Understanding p-values and statistical significance
+
+
+```{r}
+# Create data frame for statistical tests
+test_results <- data.frame()
+
+# For each sample size
+for(size in unique(results_df$sample_size)) {
+  # Filter data for this sample size
+  size_data <- filter(results_df, sample_size == size)
+  
+  # Perform F-test between random and sequential universes
+  random_data <- filter(size_data, universe_type == "random")$variance
+  sequential_data <- filter(size_data, universe_type == "sequential")$variance
+  
+  f_test <- var.test(random_data, sequential_data)
+  
+  # Add results to test_results data frame
+  test_results <- rbind(test_results, data.frame(
+    sample_size = size,
+    comparison = "random vs sequential",
+    p_value = f_test$p.value,
+    significant = f_test$p.value < 0.05
+  ))
+  
+  # Repeat for other comparisons as needed
+}
+
+print(test_results)
+
+```
+

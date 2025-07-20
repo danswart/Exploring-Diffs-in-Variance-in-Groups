@@ -1,0 +1,403 @@
+---
+title: "Random v Sequential"
+subtitle: ""
+author: "Dan Swart"
+date: "2025-04-29"
+# bibliography: manual-refs.bib
+format:
+  html:
+    code-copy: true
+    include-after-body: 
+      - text: |
+         <script type="text/javascript" src="reference-backlinks.js"></script>
+    css: 
+      - swart.css
+    page-layout: full
+    fig-width: 12
+    fig-height: 10
+    fig-dpi: 300
+    df-print: paged
+    code-overflow: wrap
+    toc: true
+    citeproc: true
+    link-citations: true
+  typst:
+    fig-width: 12
+    fig-height: 10
+    fig-dpi: 300
+    margin:
+      x: 1in
+      y: 1in
+    toc: true
+    fontsize: 14pt
+    mainfont: "Latin Modern Roman"
+execute:
+  echo: false
+  message: false
+  warning: false
+  eval: true
+  fig-width: 12
+  fig-height: 10
+
+---
+
+```{r}
+#| label: setup
+#| include: false
+
+
+knitr::opts_chunk$set(echo = TRUE)
+
+# Prevent scientific notation globally
+options(scipen = 999)
+
+# load libraries
+library(tidyverse)
+library(DT)
+library(plotly)
+library(ggplot2)
+library(kableExtra)
+library(tibble)
+library(patchwork)
+library(ppcor)
+library(ggdag)
+library(ggplot2)
+library(corrplot)
+library(ggcorrplot)
+library(car)
+library(WRS2)
+library(boot)
+library(BayesFactor)
+library(pwr)
+library(qgraph)
+library(scales)
+
+
+# Set global theme for consistent plots
+theme_set(theme_minimal(base_size = 20) + 
+          theme(
+    plot.title = element_text(face = "bold", size = 26),    # adjust title size
+    plot.subtitle = element_text(face = "bold", size = 24), # adjust subtitle size
+    axis.title.x = element_text(face = "bold", size = 22),
+    axis.title.y = element_text(face = "bold", size = 22),
+    axis.text.x = element_text(face = "bold", size = 22, angle = 45, hjust = 1),
+    legend.position = "bottom",
+    strip.text = element_text(face = "bold"),
+    panel.spacing.x = unit(1.5, "cm"),  # Horizontal spacing only
+    panel.spacing.y = unit(1.5, "cm"),   # Vertical spacing only
+    plot.margin = margin(20, 20, 20, 20, "pt")
+    )
+)
+
+
+# Set seed for reproducibility
+set.seed(123)
+
+
+
+# Helper function for consistent axis formatting (optional)
+format_axes_comma <- function() {
+  list(
+    scale_x_continuous(labels = comma_format()),
+    scale_y_continuous(labels = comma_format())
+  )
+}
+
+```
+
+```{r}
+# Define each universe
+
+# random universe
+set.seed(123)
+
+# Create a random universe (1000 random integers between 1 and 1000)
+random_universe <- sample(1:1000, 1000, replace = TRUE)
+
+# Create non-random universes (several options)
+
+
+# Option 1: Sequential numbers
+sequential_universe <- 1:1000
+
+
+# Option 2: Autocorrelated but realistic (e.g., school district scores)
+set.seed(42)
+n_months <- 1000
+district_baseline <- 75  # District tends to score around 75th percentile
+
+# Create autocorrelated scores using AR(1) process
+autocorr_universe <- numeric(n_months)
+autocorr_universe[1] <- district_baseline + rnorm(1, 0, 8)
+
+for(i in 2:n_months) {
+  # Each month's score depends on last month's + some random variation
+  autocorr_universe[i] <- 0.1 * autocorr_universe[i-1] + 0.7 * district_baseline + rnorm(1, 0, 8)
+}
+
+
+# Keep scores realistic (0-100 range)
+autocorr_universe <- pmax(0, pmin(100, autocorr_universe))
+
+
+
+# Option 3: Clustered data (4 distinct clusters)
+clustered_universe <- c(
+  rnorm(250, mean = 100, sd = 20),
+  rnorm(250, mean = 300, sd = 20),
+  rnorm(250, mean = 600, sd = 20),
+  rnorm(250, mean = 900, sd = 20)
+)
+# Round to integers and ensure values are within 1-1000
+clustered_universe <- pmin(1000, pmax(1, round(clustered_universe)))
+
+
+# Option 4: Bimodal distribution
+bimodal_universe <- c(
+  rnorm(500, mean = 250, sd = 100),
+  rnorm(500, mean = 750, sd = 100)
+)
+# Round to integers and ensure values are within 1-1000
+bimodal_universe <- pmin(1000, pmax(1, round(bimodal_universe)))
+
+
+# Option 5: Increasing variance (first half has low variance, second half high)
+increasing_var_universe <- c(
+  rnorm(500, mean = 500, sd = 50),
+  rnorm(500, mean = 500, sd = 200)
+)
+# Round to integers and ensure values are within 1-1000
+increasing_var_universe <- pmin(1000, pmax(1, round(increasing_var_universe)))
+ 
+
+
+```
+
+# Random Universe v Auto-Correlated Universe
+
+```{r}
+# Step 2: Function to take samples and calculate variance
+calculate_sample_variances <- function(universe, sample_size, num_samples = 100) {
+  variances <- numeric(num_samples)
+  for(i in 1:num_samples) {
+    sample_data <- sample(universe, sample_size)
+    variances[i] <- var(sample_data)
+  }
+  return(variances)
+}
+
+```
+
+```{r}
+# Step 3: Experiment with different sample sizes
+sample_sizes <- c(10, 30, 50, 100, 200, 500)
+results <- list()
+
+# define the nonrandom universe type
+for(size in sample_sizes) {
+  random_variances <- calculate_sample_variances(random_universe, size)
+  nonrandom_variances <- calculate_sample_variances(autocorr_universe, size)
+  
+  results[[paste0("size_", size)]] <- list(
+    random = random_variances,
+    nonrandom = nonrandom_variances
+  )
+}
+
+```
+
+
+```{r}
+# Convert nested list to a data frame
+results_df <- data.frame()
+
+for(size_name in names(results)) {
+  # Extract the numeric size from the name
+  size <- as.numeric(gsub("size_", "", size_name))
+  
+  # Add random universe results
+  random_data <- data.frame(
+    sample_size = size,
+    variance = results[[size_name]]$random,
+    universe_type = "random"
+  )
+  
+  # Add non-random universe results
+  nonrandom_data <- data.frame(
+    sample_size = size,
+    variance = results[[size_name]]$nonrandom,
+    universe_type = "Sequential"
+  )
+  
+  # Combine the data
+  results_df <- rbind(results_df, random_data, nonrandom_data)
+}
+
+# Now you can plot with ggplot
+ggplot(results_df, aes(x = factor(sample_size), y = variance, color = universe_type)) +
+  geom_boxplot() +
+  labs(
+    title = "Sample Variance by Sample Size and Universe Type",
+    subtitle = "Random v Sequential",
+    x = "Sample Size",
+    y = "Variance",
+    color = "Universe Type"
+  ) 
+
+```
+
+```{r}
+# Calculate p-values comparing variances across universe types for each sample size
+result_stats <- data.frame()
+
+for(size_name in names(results)) {
+  # Extract the numeric size from the name
+  size <- as.numeric(gsub("size_", "", size_name))
+  
+  # Run F-test to compare variances
+  f_test <- var.test(results[[size_name]]$random, results[[size_name]]$nonrandom)
+  
+  # Store results
+  result_stats <- rbind(result_stats, data.frame(
+    sample_size = size,
+    p_value = f_test$p.value,
+    significant = f_test$p.value < 0.05
+  ))
+}
+
+```
+
+```{r}
+# Add p-values to the plot
+ggplot(results_df, aes(x = factor(sample_size), y = variance, color = universe_type)) +
+  geom_boxplot() +
+  geom_text(data = result_stats, 
+            aes(x = factor(sample_size), 
+                y = max(results_df$variance) * 1.1,
+                label = sprintf("p = %.3f", p_value)),
+            inherit.aes = FALSE) +
+  labs(
+    title = "Sample Variance by Sample Size and Universe Type",
+    subtitle = "With p-values from F-test comparing variances",
+    x = "Sample Size",
+    y = "Variance",
+    color = "Universe Type"
+  ) 
+
+```
+
+```{r}
+# Calculate mean and confidence intervals for your variances
+results_summary <- results_df %>%
+  group_by(sample_size, universe_type) %>%
+  summarize(
+    mean_variance = mean(variance),
+    sd_variance = sd(variance),
+    n = n(),
+    se = sd_variance/sqrt(n),
+    ci_lower = mean_variance - 1.96*se,
+    ci_upper = mean_variance + 1.96*se
+  )
+
+# Plot with confidence intervals
+ggplot(results_summary, aes(x = factor(sample_size), y = mean_variance, color = universe_type)) +
+  geom_point(size = 3) +
+  geom_errorbar(aes(ymin = ci_lower, ymax = ci_upper), width = 0.2) +
+  labs(
+    title = "Mean Sample Variance with 95% Confidence Intervals",
+    x = "Sample Size",
+    y = "Mean Variance",
+    color = "Universe Type"
+  ) 
+
+```
+
+
+```{r}
+# Calculate the difference in variance between random and non-random for each sample size
+diff_data <- data.frame()
+
+for(size_name in names(results)) {
+  size <- as.numeric(gsub("size_", "", size_name))
+  
+  # Calculate differences for each simulation pair
+  n_sims <- length(results[[size_name]]$random)
+  differences <- results[[size_name]]$random - results[[size_name]]$nonrandom
+  
+  diff_data <- rbind(diff_data, data.frame(
+    sample_size = rep(size, n_sims),
+    variance_difference = differences
+  ))
+}
+
+# Plot the differences
+ggplot(diff_data, aes(x = factor(sample_size), y = variance_difference)) +
+  geom_boxplot() +
+  geom_hline(yintercept = 0, linetype = "dashed", color = "red") +
+  labs(
+    title = "Difference in Variance (Random - Non-random)",
+    subtitle = "Differences significantly different from zero indicate distinct populations",
+    x = "Sample Size",
+    y = "Variance Difference"
+  ) 
+
+```
+
+```{r}
+ggplot(results_df, aes(x = variance, fill = universe_type)) +
+  geom_density(alpha = 0.5) +
+  geom_vline(data = results_df %>% group_by(universe_type) %>% 
+               summarize(mean_var = mean(variance)),
+             aes(xintercept = mean_var, color = universe_type),
+             linetype = "dashed", linewidth = 1) +
+  facet_wrap(~sample_size, scales = "free") +
+  labs(title = "Distribution of Variances by Sample Size",
+       subtitle = "Vertical lines show means, while distributions show overall spread")
+```
+
+
+```{r}
+# For each sample size, perform a one-sample t-test on the differences
+diff_stats <- data.frame()
+
+for(size_name in names(results)) {
+  size <- as.numeric(gsub("size_", "", size_name))
+  
+  # Calculate differences for this sample size
+  differences <- results[[size_name]]$random - results[[size_name]]$nonrandom
+  
+  # Perform one-sample t-test against μ = 0
+  t_test <- t.test(differences, mu = 0)
+  
+  # Store results
+  diff_stats <- rbind(diff_stats, data.frame(
+    sample_size = size,
+    mean_diff = mean(differences),
+    p_value = t_test$p.value,
+    significant = t_test$p.value < 0.05,
+    lower_ci = t_test$conf.int[1],
+    upper_ci = t_test$conf.int[2]
+  ))
+}
+
+# # Print the results
+# print(diff_stats)
+```
+
+
+```{r}
+# Plot the differences with confidence intervals
+ggplot(diff_stats, aes(x = factor(sample_size), y = mean_diff)) +
+  geom_point(size = 3) +
+  geom_errorbar(aes(ymin = lower_ci, ymax = upper_ci), width = 0.2) +
+  geom_hline(yintercept = 0, linetype = "dashed", color = "red") +
+  labs(
+    title = "Mean Difference in Variance (Random - Non-random)",
+    subtitle = "With 95% confidence intervals",
+    x = "Sample Size",
+    y = "Mean Difference in Variance"
+  ) 
+
+```
+
+
