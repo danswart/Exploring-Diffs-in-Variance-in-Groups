@@ -1,6 +1,6 @@
 ---
-title: "Random v Sequential"
-subtitle: ""
+title: "Exploring Sample Variances by Type of Universe"
+subtitle: "Random v Sequential"
 description: ""
 authors: 
   - name: "Dan Swart, CPA (ret)"
@@ -64,6 +64,7 @@ format:
     fontsize: 16pt
     mainfont: "Cabin"
   
+
     
   revealjs:
     slide-number: true
@@ -156,10 +157,24 @@ flextable::set_flextable_defaults(
   padding.left = 4, padding.right = 4,
   line_spacing = 1.3,
   digits = 2,
-  decimal.mark = ",",
+  decimal.mark = ".",
   big.mark = " ",
-  na_str = "<na>"
-  )
+  na_str = "<na>")
+  
+  # flextable::theme_alafoli()	|>  # BLAH
+  # flextable::theme_apa()  # THIS IS NICE
+  # flextable::theme_booktabs() |>  # NICE, MORE COMPACT
+  # flextable::theme_box() |>   # OK, INCLUDES CELL BORDERS
+  # flextable::theme_tron() |>  # 'DARK MODE' BLUE TEXT
+  # flextable::theme_tron_legacy() |>   # 'DARK MODE' YELLOW TEXT
+  # flextable::theme_vader() |>    # 'DARK MODE' WHITE TEXT
+  # flextable::theme_vanilla() |>   # NOT SPECIAL
+  # flextable::theme_zebra()	|>
+  #
+  # flextable::bg(bg = "palegreen", part = "header")
+  # flextable::bg(i = 8, bg = "yellow", part = "body")   OR
+  # 
+
 
 
 # Set global theme for consistent plots
@@ -171,9 +186,9 @@ ggplot2::theme_set(
         family = "Cabin",
         face = "bold",
         color = "darkgreen",
-        size = 22,
+        size = 26,
         fill = "yellow",
-        lineheight = 1.0,
+        lineheight = 1.2,
         padding = ggplot2::margin(5.5, 5.5, 0.0, 5.5),
         margin = ggplot2::margin(0, 0, 5.5, 0)
       ),
@@ -181,15 +196,15 @@ ggplot2::theme_set(
         family = "Cabin",
         color = "darkgreen",
         face = "bold",
-        size = 20,
+        size = 24,
         fill = "yellow",
-        lineheight = 1.0,
-        padding = ggplot2::margin(0.0, 5.5, 5.5, 5.5),
-        margin = ggplot2::margin(0, 0, 5.5, 0)
+        lineheight = 1.2,
+        padding = ggplot2::margin(5.5, 5.5, 5.5, 5.5),
+        margin = ggplot2::margin(10.5, 0, 5.5, 0)
       ),
       plot.caption = ggtext::element_markdown(
         family = "Cabin",
-        size = 16,
+        size = 22,
         hjust = 1,
         color = "darkblue",
         face = "italic",
@@ -200,7 +215,7 @@ ggplot2::theme_set(
         family = "Cabin",
         face = "bold",
         color = "blue",
-        size = 16,
+        size = 20,
         angle = 45,
         hjust = 1
       ),
@@ -209,13 +224,13 @@ ggplot2::theme_set(
         family = "Cabin",
         face = "bold",
         color = "blue",
-        size = 16),
+        size = 20),
         # ggplot2::element_blank(),
       axis.text.y = ggtext::element_markdown(
         family = "Cabin",
         face = "bold",
         color = "blue",
-        size = 16,
+        size = 20,
         angle = 45,
         hjust = 1
       ),
@@ -224,7 +239,7 @@ ggplot2::theme_set(
         family = "Cabin",
         face = "bold",
         color = "blue",
-        size = 16),
+        size = 20),
         # ggplot2::element_blank(),
       strip.text = ggtext::element_markdown(
         family = "Cabin",
@@ -249,7 +264,7 @@ ggplot2::theme_set(
 
   
 # Set seed for reproducibility
-set.seed(123)
+base::set.seed(123)
 
 ```
 

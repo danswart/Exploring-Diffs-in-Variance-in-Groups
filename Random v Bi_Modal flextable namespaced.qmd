@@ -1,5 +1,5 @@
 ---
-title: "Homogeneity"
+title: "Exploring Sample Variances for Distribution Types"
 subtitle: "Random v Bi-Modal"
 description: ""
 authors: 
@@ -273,40 +273,77 @@ base::set.seed(123)
 
 ```{r}
 
-# Create a random universe (1000 random integers between 1 and 1000)
-random_universe <- base::sample(1:1000, 1000, replace = TRUE)
+# Create a random universe (1000 random integers between 1 and 300)
+random_universe <- base::sample(1:300, 1000, replace = TRUE)
 
 # Create non-random universes (several options)
 
 # Option 1: Sequential numbers
-sequential_universe <- 1:1000
+sequential_universe <- base::seq(1, 300, length.out = 1000)
 
 # Option 2: Clustered data (4 distinct clusters)
 clustered_universe <- c(
-  stats::rnorm(250, mean = 100, sd = 20),
-  stats::rnorm(250, mean = 300, sd = 20),
-  stats::rnorm(250, mean = 600, sd = 20),
-  stats::rnorm(250, mean = 900, sd = 20)
+  stats::rnorm(250, mean = 30, sd = 6),
+  stats::rnorm(250, mean = 100, sd = 6),
+  stats::rnorm(250, mean = 180, sd = 6),
+  stats::rnorm(250, mean = 270, sd = 6)
 )
-# Round to integers and ensure values are within 1-1000
-clustered_universe <- base::pmin(1000, base::pmax(1, base::round(clustered_universe)))
+# Round to integers and ensure values are within 1-300
+clustered_universe <- base::pmin(300, base::pmax(1, base::round(clustered_universe)))
 
 # Option 3: Bimodal distribution
 bimodal_universe <- c(
-  stats::rnorm(500, mean = 250, sd = 100),
-  stats::rnorm(500, mean = 750, sd = 100)
+  stats::rnorm(500, mean = 75, sd = 30),
+  stats::rnorm(500, mean = 225, sd = 30)
 )
-# Round to integers and ensure values are within 1-1000
-bimodal_universe <- base::pmin(1000, base::pmax(1, base::round(bimodal_universe)))
+# Round to integers and ensure values are within 1-300
+bimodal_universe <- base::pmin(300, base::pmax(1, base::round(bimodal_universe)))
 
 # Option 4: Increasing variance (first half has low variance, second half high)
 increasing_var_universe <- c(
-  stats::rnorm(500, mean = 500, sd = 50),
-  stats::rnorm(500, mean = 500, sd = 200)
+  stats::rnorm(500, mean = 150, sd = 15),
+  stats::rnorm(500, mean = 150, sd = 60)
 )
-# Round to integers and ensure values are within 1-1000
-increasing_var_universe <- base::pmin(1000, base::pmax(1, base::round(increasing_var_universe)))
- 
+# Round to integers and ensure values are within 1-300
+increasing_var_universe <- base::pmin(300, base::pmax(1, base::round(increasing_var_universe)))
+
+
+
+
+# # Create a random universe (1000 random integers between 1 and 1000)
+# random_universe <- base::sample(1:1000, 1000, replace = TRUE)
+# 
+# # Create non-random universes (several options)
+# 
+# # Option 1: Sequential numbers
+# sequential_universe <- 1:1000
+# 
+# # Option 2: Clustered data (4 distinct clusters)
+# clustered_universe <- c(
+#   stats::rnorm(250, mean = 100, sd = 20),
+#   stats::rnorm(250, mean = 300, sd = 20),
+#   stats::rnorm(250, mean = 600, sd = 20),
+#   stats::rnorm(250, mean = 900, sd = 20)
+# )
+# # Round to integers and ensure values are within 1-1000
+# clustered_universe <- base::pmin(1000, base::pmax(1, base::round(clustered_universe)))
+# 
+# # Option 3: Bimodal distribution
+# bimodal_universe <- c(
+#   stats::rnorm(500, mean = 250, sd = 100),
+#   stats::rnorm(500, mean = 750, sd = 100)
+# )
+# # Round to integers and ensure values are within 1-1000
+# bimodal_universe <- base::pmin(1000, base::pmax(1, base::round(bimodal_universe)))
+# 
+# # Option 4: Increasing variance (first half has low variance, second half high)
+# increasing_var_universe <- c(
+#   stats::rnorm(500, mean = 500, sd = 50),
+#   stats::rnorm(500, mean = 500, sd = 200)
+# )
+# # Round to integers and ensure values are within 1-1000
+# increasing_var_universe <- base::pmin(1000, base::pmax(1, base::round(increasing_var_universe)))
+#  
 
 
 ```
@@ -492,11 +529,10 @@ ggplot2::ggplot(diff_data, ggplot2::aes(x = factor(sample_size), y = variance_di
 
 ```{r}
 
-# Calculate means first
+## Calculate means first
 mean_vars <- results_df |>
   dplyr::group_by(universe_type) |>
   dplyr::summarize(mean_var = base::mean(variance))
-
 
 ggplot2::ggplot(results_df, 
                 ggplot2::aes(x = variance, 
@@ -509,15 +545,30 @@ ggplot2::ggplot(results_df,
                       scales = "free",
                       labeller = ggplot2::labeller(sample_size = ~ base::paste("Sample Size =", .x))) +
   ggplot2::labs(
-    title = "Distribution of Variances by Sample Size",
+    title = "Distribution of Sample Variances for 2 Universes by Sample Size",
     subtitle = "Vertical lines show means, while distributions show overall spread",
     x = "Variance",
     y = "Relative Frequency"
   ) +
   ggplot2::scale_x_continuous(labels = scales::label_comma()) +
-  ggplot2::scale_y_continuous(labels = NULL)
-
+  ggplot2::scale_y_continuous(labels = NULL) +
+  ggplot2::scale_fill_manual(
+    name = "Universe Type",
+    values = c("bi-modal" = "red", "random" = "blue"),
+    labels = c("bi-modal" = "Bi-Modal", "random" = "Random")
+  ) +
+  ggplot2::scale_color_manual(
+    name = "Universe Type",
+    values = c("bi-modal" = "red", "random" = "blue"),
+    labels = c("bi-modal" = "Bi-Modal", "random" = "Random")
+  ) +
+  ggplot2::theme(legend.position = "bottom")
 ```
+
+#### The counterintuitive insight: 
+
+A bi-modal distribution isn't ***automatically*** high-variance. It depends on how far apart the modes are and how tightly clustered the values are around each mode. In this case, the relatively small sd=30 within each cluster keeps the bi-modal variance lower than the uniform.
+
 
 
 ```{r}
@@ -577,4 +628,17 @@ ggplot2::ggplot(diff_stats,
   ggplot2::scale_y_continuous(labels = scales::label_comma())
 ```
 
+### Is one "better"?
+
+No — "better" isn't meaningful here. They're just different populations with different characteristics. The simulations demonstrate that:
+
+* The sample variance is a consistent estimator (it gets more precise with larger samples)  
+* Different population structures produce different variance magnitudes  
+* You can't infer population shape from the distribution of sample variances alone   
+
+
+
+#### The practical takeaway: 
+
+If you're sampling from an unknown population, larger samples give you more reliable variance estimates regardless of the underlying distribution shape. But the variance estimate itself only tells you about spread—not whether the population is uniform, bi-modal, or something else entirely.
 
